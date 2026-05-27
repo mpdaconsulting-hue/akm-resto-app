@@ -10,7 +10,73 @@ const SUPPLEMENTS = [
 ];
 const SIDES = ["Frites", "Boulgour"];
 const fmt = (n) => n.toFixed(2).replace(".", ",") + " €";
+const TALLY_FORM_URL = "https://tally.so/r/b56aM7";
 
+function buildOrderPayload(cart, total) {
+  const entries = Object.values(cart);
+
+  const recap = entries.map((entry, index) => {
+    const { item, qty, unitPrice, options } = entry;
+    const details = [];
+
+    if (item.menuPrice) {
+      details.push(options?.formule ? "Formule : menu" : "Formule : article seul");
+    }
+
+    if (options?.viandes?.length) {
+      details.push(`Viande(s) : ${options.viandes.join(", ")}`);
+    }
+
+    if (options?.side) {
+      details.push(`Accompagnement : ${options.side}`);
+    }
+
+    if (options?.sauces?.length) {
+      details.push(`Sauce(s) : ${options.sauces.join(", ")}`);
+    }
+
+    if (options?.supplements?.length) {
+      details.push(
+        `Supplément(s) : ${options.supplements
+          .map((s) => `${s.name} (+${fmt(s.price)})`)
+          .join(", ")}`
+      );
+    }
+
+    return `${index + 1}. ${item.name} x${qty} — ${fmt(unitPrice * qty)}
+Prix unitaire : ${fmt(unitPrice)}
+${details.length ? details.join("\n") : "Aucune option particulière"}`;
+  }).join("\n\n");
+
+  return {
+    commande_id: `AKM-${Date.now()}`,
+    commande_recap: `${recap}\n\nTOTAL COMMANDE : ${fmt(total)}`,
+    commande_total: fmt(total),
+    commande_total_num: total.toFixed(2),
+    commande_json: JSON.stringify(
+      entries.map(({ item, qty, unitPrice, options }) => ({
+        produit: item.name,
+        quantite: qty,
+        prix_unitaire: unitPrice,
+        total_ligne: unitPrice * qty,
+        options,
+      }))
+    ),
+    source: "akm_resto_app",
+  };
+}
+
+function openTallyCheckout(cart, total) {
+  const payload = buildOrderPayload(cart, total);
+  const params = new URLSearchParams();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    params.set(key, String(value));
+  });
+
+  const separator = TALLY_FORM_URL.includes("?") ? "&" : "?";
+  window.location.href = `${TALLY_FORM_URL}${separator}${params.toString()}`;
+}
 // ─── Categories ──────────────────────────────────────────────
 const CATEGORIES = [
   { key: "burgers", label: "Burgers", emoji: "🍔" },
@@ -376,7 +442,7 @@ function CustomModal({ item, onClose, onConfirm }) {
 }
 
 // ─── Cart Panel ──────────────────────────────────────────────
-function CartPanel({ cart, onClose, onClear, onQtyChange, total }) {
+function CartPanel({ cart, onClose, onClear, onQtyChange, total, onCheckout }) {
   const [done, setDone] = useState(false);
   const entries = Object.values(cart);
 
@@ -466,13 +532,13 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, total }) {
               <span style={{ fontWeight:700, fontSize:16 }}>Total</span>
               <span style={{ fontWeight:900, fontSize:24, color:"#e8400c" }}>{fmt(total)}</span>
             </div>
-            <button onClick={() => setDone(true)} style={{
+            <button onClick={oncheckout} style={{
               width:"100%", background:"linear-gradient(135deg,#ff6b1a,#e8400c)",
               color:"#fff", border:"none", borderRadius:14, padding:16,
               fontWeight:900, fontSize:16, cursor:"pointer",
               boxShadow:"0 4px 18px rgba(232,64,12,0.4)",
             }}>
-              Passer la commande · {fmt(total)}
+              Finaliser ma commande · {fmt(total)}
             </button>
             <button onClick={onClear} style={{
               width:"100%", background:"transparent", color:"#9c8d7a", border:"none",
@@ -701,7 +767,7 @@ export default function AKMRestoApp() {
             animation:"slideUp 0.3s ease-out",
           }}>
             <CartPanel cart={cart} total={total} onClose={() => setCartOpen(false)}
-              onClear={() => setCart({})} onQtyChange={handleQtyChange} />
+              onClear={() => setCart({})} onQtyChange={handleQtyChange} onCheckout={() => openTallyCheckout(cart, total)} />
           </div>
         </div>
       )}
