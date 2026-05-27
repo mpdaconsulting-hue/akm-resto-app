@@ -442,7 +442,7 @@ function CustomModal({ item, onClose, onConfirm }) {
 }
 
 // ─── Cart Panel ──────────────────────────────────────────────
-function CartPanel({ cart, onClose, onClear, onQtyChange, total, onCheckout }) {
+function CartPanel({ cart, onClose, onClear, onQtyChange, total }) {
   const [done, setDone] = useState(false);
   const entries = Object.values(cart);
 
@@ -532,7 +532,7 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, total, onCheckout }) {
               <span style={{ fontWeight:700, fontSize:16 }}>Total</span>
               <span style={{ fontWeight:900, fontSize:24, color:"#e8400c" }}>{fmt(total)}</span>
             </div>
-            <button onClick={oncheckout} style={{
+            <button onClick={() => openTallyCheckout(cart, total)} style={{
               width:"100%", background:"linear-gradient(135deg,#ff6b1a,#e8400c)",
               color:"#fff", border:"none", borderRadius:14, padding:16,
               fontWeight:900, fontSize:16, cursor:"pointer",
@@ -767,7 +767,7 @@ export default function AKMRestoApp() {
             animation:"slideUp 0.3s ease-out",
           }}>
             <CartPanel cart={cart} total={total} onClose={() => setCartOpen(false)}
-              onClear={() => setCart({})} onQtyChange={handleQtyChange} onCheckout={() => openTallyCheckout(cart, total)} />
+              onClear={() => setCart({})} onQtyChange={handleQtyChange} />
           </div>
         </div>
       )}
