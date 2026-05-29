@@ -427,7 +427,7 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const showBoissonsSupp = CATEGORIES_AVEC_BOISSONS.includes(categoryKey);
   const showBoissonFormule = formule && item.menuPrice;
   const showSideChoice = item.sideChoice || (formule && item.menuPrice);
-  const showSideChoice = item.sideChoice || (formule && item.menuPrice);
+  
   useEffect(() => {
   if (showSideChoice && !side) {
     setSide("Frites");
