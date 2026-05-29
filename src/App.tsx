@@ -5,33 +5,39 @@ const TALLY_FORM_URL = "https://tally.so/r/b56aM7";
 
 // 🎨 Palette pro (inspirée Uber Eats / Deliveroo)
 const COLORS = {
-  primary: "#FF4F18",       // Orange punchy
-  primaryDark: "#D63A0F",
-  primaryLight: "#FF6B3D",
-  accent: "#FFB800",        // Jaune (rappel logo)
-  bg: "#FCFAF7",            // Cream très clair
-  bgAlt: "#F5F1EB",
+  primary: "#FF4D00",       // Orange moderne très visible
+  primaryDark: "#C93A00",
+  primaryLight: "#FF7A3D",
+
+  accent: "#00C781",        // Vert moderne validation / fraîcheur
+  accentDark: "#009E66",
+
+  bg: "#EEF2F6",            // Fond écran plus contrasté
+  bgAlt: "#E2E8F0",         // Fond secondaire
   card: "#FFFFFF",
-  ink: "#1B1B1B",           // Noir doux
-  inkSoft: "#4A4A4A",
-  muted: "#8A8580",
-  border: "#EDE7DF",
-  borderSoft: "#F5F0E8",
-  success: "#22A06B",
-  danger: "#E8400C",
+
+  ink: "#111827",
+  inkSoft: "#374151",
+  muted: "#6B7280",
+
+  border: "#D7DEE8",
+  borderSoft: "#E9EEF5",
+
+  success: "#00A86B",
+  danger: "#EF3B2D",
 };
 
 // 🥬 CRUDITÉS
-const CRUDITES = ["Salade", "Tomates", "Oignons", "Concombre", "Cornichons", "Olives"];
+const CRUDITES = ["Salade", "Tomates", "Oignons", "Concombre"];
 const CRUDITES_AUCUNE = "Sans crudités";
 
 // 🥫 SAUCES (max 2 + sans sauce exclusif)
-const SAUCES = ["Blanche", "Algérienne", "Harissa", "Ketchup", "Barbecue", "Burger", "Andalouse", "Sans sauce"];
+const SAUCES = ["Blanche", "Algérienne", "Harissa", "Ketchup", "Mayonnaise", "Burger", "Andalouse", "Sans sauce"];
 const MAX_SAUCES = 2;
 
 // 🥩 VIANDES (choix viande principale + supplément viande)
 const VIANDES = ["Poulet pané", "Poulet mariné", "Kébab", "Kofté", "Boeuf haché", "Merguez", "Américain (steack)", "Falafel"];
-const VIANDES_SUPP = ["Kébab", "Poulet pané", "Poulet mariné", "Kofté", "Boeuf haché", "Merguez", "Américain"];
+const VIANDES_SUPP = ["Kébab", "Poulet pané", "Poulet mariné", "Kofté", "Boeuf haché", "Merguez"];
 
 // ➕ SUPPLÉMENTS classiques (sans viande, viande = section dédiée)
 const SUPPLEMENTS = [
@@ -44,6 +50,15 @@ const PRIX_SUPP_VIANDE = 3;
 
 // 🍟 SIDES
 const SIDES = ["Frites", "Boulgour"];
+
+// 🧒 CHOIX BOX ENFANT
+const ENFANT_CHOIX = [
+  "Petit burger",
+  "5 nuggets",
+  "Viande kébab",
+  "Wrap poulet",
+  "Falafel",
+];
 
 // 🥤 BOISSONS FORMULE (boisson 33cl incluse)
 const BOISSONS_FORMULE = [
@@ -203,9 +218,9 @@ const MENU = {
     { id:"pf13", name:"Chicken Filet", desc:"Filet de poulet pané PP", price:1.00, hasSauces:true, allergenes:["G","O"], allowDirectQuantity:true, maxDirectQuantity:20 },
   ],
   enfants: [
-    { id:"e1g", name:"Kilyan Box (Garçon)", desc:"1 petit burger OU 5 nuggets OU viande kébab OU wrap poulet OU falafel + petite frite + jus 20cl + SURPRISE", price:7.00, meatChoice:1, hasSauces:true, allergenes:["G","O"] },
-    { id:"e1f", name:"Yélize Box (Fille)", desc:"1 petit burger OU 5 nuggets OU viande kébab OU wrap poulet OU falafel + petite frite + jus 20cl + SURPRISE", price:7.00, meatChoice:1, hasSauces:true, allergenes:["G","O"] },
-  ],
+   { id:"e1g", name:"Kilyan Box (Garçon)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
+{ id:"e1f", name:"Yélize Box (Fille)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
+    
   desserts: [
     { id:"d1", name:"Tarte Tatin", desc:"Pommes caramélisées", price:4.00, allergenes:["G","L","O"] },
     { id:"d2", name:"Glace Ben & Jerry's", desc:"Cookie Dough ou Chocolate Fudge Brownie", price:4.00, allergenes:["L","G","O"] },
@@ -302,6 +317,9 @@ function buildOrderPayload(cart, total, creneauLabel) {
     const details = [];
     if (item.menuPrice) details.push(options?.formule ? "Formule menu" : "Article seul");
     if (options?.viandes?.length) details.push(`Viande(s) : ${options.viandes.join(", ")}`);
+    if (options?.enfantChoix) {
+  details.push(`Choix box enfant : ${options.enfantChoix}`);
+}
     if (options?.side) details.push(`Accompagnement : ${options.side}`);
     if (options?.crudites?.length) details.push(`Crudités : ${options.crudites.join(", ")}`);
     if (options?.crudites === "none") details.push(`Sans crudités`);
@@ -403,9 +421,21 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const [crudites, setCrudites] = useState(CRUDITES); // par défaut tout coché
   const [boissonFormule, setBoissonFormule] = useState(DEFAULT_BOISSON_FORMULE);
   const [boissonsSupp, setBoissonsSupp] = useState([]);
+  const [enfantChoix, setEnfantChoix] = useState(null);
 
   const showBoissonsSupp = CATEGORIES_AVEC_BOISSONS.includes(categoryKey);
   const showBoissonFormule = formule && item.menuPrice;
+  const showSideChoice = item.sideChoice || (formule && item.menuPrice);
+  const showSideChoice = item.sideChoice || (formule && item.menuPrice);
+  useEffect(() => {
+  if (showSideChoice && !side) {
+    setSide("Frites");
+  }
+
+  if (!showSideChoice && side && !item.sideChoice) {
+    setSide(null);
+  }
+}, [showSideChoice, side, item.sideChoice]);
 
   const suppTotal = supplements.reduce((s, x) => s + x.price, 0);
   const suppViandeTotal = supplementViande ? PRIX_SUPP_VIANDE : 0;
@@ -414,7 +444,10 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const unitP = baseP + suppTotal + suppViandeTotal + boissonsSuppTotal;
   const totalP = unitP * quantity;
   const meatOK = !item.meatChoice || viandes.length === item.meatChoice;
-  const saucesValid = sauces.length === 0 || !sauces.includes("Sans sauce") || sauces.length === 1;
+const enfantOK = !item.childBox || !!enfantChoix;
+const sideOK = !showSideChoice || !!side;
+const saucesValid = sauces.length === 0 || !sauces.includes("Sans sauce") || sauces.length === 1;
+const canAdd = meatOK && enfantOK && sideOK && saucesValid;
 
   function toggleViande(v) {
     if (item.meatChoice === 1) { setViandes([v]); return; }
@@ -457,12 +490,18 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   }
 
   function handleAdd() {
-    const opts = {
-      formule, viandes, sauces, supplements, supplementViande, side,
-      crudites: crudites === "none" ? "none" : crudites,
-      boissonFormule: showBoissonFormule ? boissonFormule : null,
-      boissonsSupp,
-    };
+   const opts = {
+  formule,
+  viandes,
+  enfantChoix,
+  sauces,
+  supplements,
+  supplementViande,
+  side: showSideChoice ? side : null,
+  crudites: crudites === "none" ? "none" : crudites,
+  boissonFormule: showBoissonFormule ? boissonFormule : null,
+  boissonsSupp,
+};
     const key = `${item.id}_${JSON.stringify(opts)}_${Date.now()}`;
     onConfirm({ key, item, unitPrice: unitP, options: opts, qty: quantity });
     onClose();
@@ -485,10 +524,19 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
       display: "flex", alignItems: "flex-end",
     }}>
       <div style={{
-        background: COLORS.bg, width: "100%", height: "92dvh", maxHeight: "92dvh",
-        borderRadius: "24px 24px 0 0", display: "flex", flexDirection: "column",
-        animation: "slideUp 0.3s ease-out", overflow: "hidden",
-      }}>
+  background: COLORS.bg,
+  width: "100%",
+  maxWidth: 520,
+  height: "92dvh",
+  maxHeight: "92dvh",
+  margin: "0 auto",
+  borderRadius: "24px 24px 0 0",
+  display: "flex",
+  flexDirection: "column",
+  animation: "slideUp 0.3s ease-out",
+  overflow: "hidden",
+  boxShadow: "0 -12px 40px rgba(0,0,0,0.25)",
+}}>
         {/* HEADER */}
         <div style={{ background: `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`, padding: "18px 20px 14px", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -530,6 +578,27 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
           </Section>
 
           {/* Viandes */}
+          {/* Choix box enfant */}
+{item.childBox && (
+  <Section title="🧒 Choix box enfant *">
+    <div style={{ display: "flex", flexWrap: "wrap" }}>
+      {ENFANT_CHOIX.map(choice => (
+        <Chip
+          key={choice}
+          label={choice}
+          selected={enfantChoix === choice}
+          onClick={() => setEnfantChoix(choice)}
+        />
+      ))}
+    </div>
+
+    {!enfantChoix && (
+      <div style={{ fontSize: 11, color: COLORS.primary, marginTop: 6 }}>
+        ⚠ Veuillez choisir une option pour la box enfant
+      </div>
+    )}
+  </Section>
+)}
           {item.meatChoice && (
             <Section title={`Choix viande${item.meatChoice > 1 ? "s" : ""} — ${item.meatChoice === 1 ? "1 au choix" : `${item.meatChoice} au choix`} *`}>
               <div style={{ display: "flex", flexWrap: "wrap" }}>
@@ -553,7 +622,7 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
           )}
 
           {/* Accompagnement */}
-          {item.sideChoice && (
+          {showSideChoice && (
             <Section title="Accompagnement *">
               <div style={{ display: "flex", gap: 10 }}>
                 {SIDES.map(s => (
@@ -698,17 +767,32 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
             </div>
             <div style={{ fontWeight: 900, fontSize: 22, color: COLORS.primary }}>{fmt(totalP)}</div>
           </div>
-          <button onClick={handleAdd} disabled={!meatOK} style={{
-            width: "100%",
-            background: meatOK ? `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})` : "#E0D8D0",
-            color: meatOK ? "#fff" : "#9c8d7a",
-            border: "none", borderRadius: 14, padding: "15px",
-            fontWeight: 900, fontSize: 15, cursor: meatOK ? "pointer" : "not-allowed",
-            boxShadow: meatOK ? "0 4px 18px rgba(255,79,24,0.4)" : "none",
-            transition: "all 0.2s",
-          }}>
-            {meatOK ? `✓ Ajouter au panier · ${fmt(totalP)}` : `Choisissez ${item.meatChoice - viandes.length} viande(s) en plus`}
-          </button>
+          <button onClick={handleAdd} disabled={!canAdd} style={{
+  width:"100%",
+  background: canAdd ? `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})` : "#E0D8D0",
+  color: canAdd ? "#fff" : "#9c8d7a",
+  border:"none",
+  borderRadius:14,
+  padding:"15px",
+  fontWeight:900,
+  fontSize:15,
+  cursor: canAdd ? "pointer" : "not-allowed",
+  boxShadow: canAdd ? "0 4px 18px rgba(255,79,24,0.4)" : "none",
+  transition:"all 0.2s",
+}}>
+  {canAdd
+    ? `✓ Ajouter au panier · ${fmt(totalP)}`
+    : item.childBox && !enfantChoix
+      ? "Choisissez une option pour la box enfant"
+      : showSideChoice && !side
+        ? "Choisissez un accompagnement"
+        : !saucesValid
+          ? "Vérifiez le choix des sauces"
+          : item.meatChoice
+            ? `Choisissez ${item.meatChoice - viandes.length} viande(s) en plus`
+            : "Complétez vos choix"
+  }
+</button>
         </div>
       </div>
     </div>
@@ -829,6 +913,7 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, total, onSlotsOpen }) 
   function optSummary(options) {
     const parts = [];
     if (options.formule) parts.push("Formule menu");
+    if (options.enfantChoix) parts.push("🧒 Box enfant : " + options.enfantChoix);
     if (options.viandes?.length) parts.push("🥩 " + options.viandes.join(", "));
     if (options.side) parts.push(options.side === "Frites" ? "🍟 Frites" : "🌾 Boulgour");
     if (options.crudites === "none") parts.push("Sans crudités");
@@ -910,36 +995,107 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, total, onSlotsOpen }) 
 function ItemCard({ item, totalQty, onOpen }) {
   return (
     <div style={{
-      background:"#fff", borderRadius:16, padding:"14px 16px",
-      display:"flex", alignItems:"center", gap:12,
-      boxShadow:"0 2px 8px rgba(0,0,0,0.05)", border:`1px solid ${COLORS.border}`,
-      marginBottom:10,
+      background: COLORS.card,
+      borderRadius: 20,
+      padding: "16px 18px",
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      boxShadow: "0 10px 28px rgba(17,24,39,0.08)",
+      border: `1px solid ${COLORS.borderSoft}`,
+      marginBottom: 14,
+      transition: "transform 0.15s ease, box-shadow 0.15s ease",
     }}>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontWeight:700, fontSize:15, color:COLORS.ink, lineHeight:1.3 }}>{item.name}</div>
-        {item.desc && <div style={{ fontSize:12, color:COLORS.muted, marginTop:3, lineHeight:1.4 }}>{item.desc}</div>}
-        <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-          <span style={{ fontWeight:800, fontSize:16, color:COLORS.primary }}>{fmt(item.price)}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontWeight: 800,
+          fontSize: 15,
+          color: COLORS.ink,
+          lineHeight: 1.3,
+          marginBottom: 3,
+        }}>
+          {item.name}
+        </div>
+
+        {item.desc && (
+          <div style={{
+            fontSize: 12,
+            color: COLORS.muted,
+            marginTop: 3,
+            lineHeight: 1.4,
+          }}>
+            {item.desc}
+          </div>
+        )}
+
+        <div style={{
+          marginTop: 8,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}>
+          <span style={{
+            fontWeight: 900,
+            fontSize: 16,
+            color: COLORS.primary,
+          }}>
+            {fmt(item.price)}
+          </span>
+
           {item.menuPrice && (
-            <span style={{ fontSize:11, background:"#fff4ee", color:COLORS.primaryDark, border:"1px solid #f9c4ae", borderRadius:20, padding:"2px 8px", fontWeight:600 }}>
+            <span style={{
+              fontSize: 11,
+              background: "#FFF1EA",
+              color: COLORS.primaryDark,
+              border: "1px solid #FFD2C0",
+              borderRadius: 999,
+              padding: "3px 9px",
+              fontWeight: 700,
+            }}>
               Formule {fmt(item.menuPrice)}
             </span>
           )}
         </div>
       </div>
+
       <button onClick={onOpen} style={{
-        position:"relative", width:40, height:40, borderRadius:"50%", border:"none",
-        background:`linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`, color:"#fff",
-        fontWeight:900, fontSize:22, cursor:"pointer", flexShrink:0,
-        boxShadow:"0 3px 10px rgba(255,79,24,0.35)",
+        position: "relative",
+        width: 42,
+        height: 42,
+        borderRadius: "50%",
+        border: "none",
+        background: `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`,
+        color: "#fff",
+        fontWeight: 900,
+        fontSize: 23,
+        cursor: "pointer",
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 8px 18px rgba(255,77,0,0.35)",
       }}>
         +
         {totalQty > 0 && (
           <span style={{
-            position:"absolute", top:-5, right:-5, background:COLORS.ink,
-            color:"#fff", borderRadius:"50%", width:18, height:18,
-            fontSize:10, fontWeight:900, display:"flex", alignItems:"center", justifyContent:"center",
-          }}>{totalQty}</span>
+            position: "absolute",
+            top: -6,
+            right: -6,
+            background: COLORS.ink,
+            color: "#fff",
+            borderRadius: "50%",
+            width: 20,
+            height: 20,
+            fontSize: 11,
+            fontWeight: 900,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 3px 8px rgba(0,0,0,0.22)",
+          }}>
+            {totalQty}
+          </span>
         )}
       </button>
     </div>
@@ -956,10 +1112,14 @@ export default function AKMRestoApp() {
   const navRef = useRef(null);
 
   const needsModal = (item, catKey) =>
-    item.meatChoice || item.sideChoice || item.hasSauces || item.hasSupplements
-    || item.menuPrice || item.hasCrudites
-    || CATEGORIES_AVEC_BOISSONS.includes(catKey);
-
+  item.childBox ||
+  item.meatChoice ||
+  item.sideChoice ||
+  item.hasSauces ||
+  item.hasSupplements ||
+  item.menuPrice ||
+  item.hasCrudites ||
+  CATEGORIE_AVEC_BOISSONS.includes(catKey);
   function handleOpen(item) {
     if (needsModal(item, activeCategory)) {
       setModalItem({ item, categoryKey: activeCategory });
