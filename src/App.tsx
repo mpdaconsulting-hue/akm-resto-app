@@ -218,8 +218,9 @@ const MENU = {
     { id:"pf13", name:"Chicken Filet", desc:"Filet de poulet pané PP", price:1.00, hasSauces:true, allergenes:["G","O"], allowDirectQuantity:true, maxDirectQuantity:20 },
   ],
   enfants: [
-   { id:"e1g", name:"Kilyan Box (Garçon)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
-{ id:"e1f", name:"Yélize Box (Fille)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
+  { id:"e1g", name:"Kilyan Box (Garçon)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
+  { id:"e1f", name:"Yélize Box (Fille)", desc:"1 choix + petite frite + jus 20cl + surprise", price:7.00, childBox:true, allergenes:["G","O"] },
+],
     
   desserts: [
     { id:"d1", name:"Tarte Tatin", desc:"Pommes caramélisées", price:4.00, allergenes:["G","L","O"] },
