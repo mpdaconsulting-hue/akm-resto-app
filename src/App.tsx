@@ -203,8 +203,8 @@ const MENU = {
     { id:"a11", name:"Végétarienne Falafels", desc:"Crudités, concombre, féta, falafels", price:11.00, sideChoice:true, hasSauces:true, hasSupplements:true, hasCrudites:true, allergenes:["L","G"] },
   ],
   petiteFaim: [
-    { id:"pf1", name:"Mini Yufka ou Mini Kébab", desc:"", price:4.50, hasSauces:true, allergenes:["G"] },
-    { id:"pf2", name:"Mini Burger / 5 Nuggets / Mini Wrap", desc:"Poulet pané", price:3.50, hasSauces:true, allergenes:["G"] },
+    { id:"pf1", name:"Mini Yufka ou Mini Kébab", desc:"Au choix", price:4.50, variants:["Mini Yufka","Mini Kébab"], hasSauces:true, allergenes:["G"] },
+    { id:"pf2", name:"Mini Burger / 5 Nuggets / Mini Wrap", desc:"Poulet pané — au choix", price:3.50, variants:["Mini Burger","5 Nuggets","Mini Wrap"], hasSauces:true, allergenes:["G"] },
     { id:"pf3", name:"Barquette de Viande (petite)", desc:"", price:6.00, hasSauces:true, allergenes:[] },
     { id:"pf4", name:"Barquette de Viande (moyenne)", desc:"", price:7.00, hasSauces:true, allergenes:[] },
     { id:"pf5", name:"Barquette de Viande (grande)", desc:"", price:8.00, hasSauces:true, allergenes:[] },
@@ -317,6 +317,7 @@ function buildOrderPayload(cart, total, creneauLabel) {
     const { item, qty, unitPrice, options } = entry;
     const details = [];
     if (item.menuPrice) details.push(options?.formule ? "Formule menu" : "Article seul");
+    if (options?.variantChoice) details.push(`Choix : ${options.variantChoice}`);
     if (options?.viandes?.length) details.push(`Viande(s) : ${options.viandes.join(", ")}`);
     if (options?.enfantChoix) {
   details.push(`Choix box enfant : ${options.enfantChoix}`);
@@ -344,20 +345,78 @@ function buildOrderPayload(cart, total, creneauLabel) {
     commande_total: fmt(total),
     commande_total_num: total.toFixed(2),
     heure_recuperation: creneauLabel,
-    commande_json: JSON.stringify(entries.map(({ item, qty, unitPrice, options }) => ({
-      produit: item.name, quantite: qty, prix_unitaire: unitPrice,
-      total_ligne: unitPrice * qty, options,
-    }))),
+    commande_json: JSON.stringify(entries.map(({ item, qty, unitPrice, options }) => {
+      const o = options || {};
+      // Version compacte : on n'envoie que les options réellement choisies
+      const optClean = {};
+      if (o.formule) optClean.formule = true;
+      if (o.enfantChoix) optClean.enfant = o.enfantChoix;
+      if (o.variantChoice) optClean.choix = o.variantChoice;
+      if (o.viandes?.length) optClean.viandes = o.viandes;
+      if (o.side) optClean.accompagnement = o.side;
+      if (o.crudites === "none") optClean.crudites = "aucune";
+      else if (o.crudites?.length && o.crudites.length < CRUDITES.length) optClean.crudites = o.crudites;
+      if (o.boissonFormule) optClean.boisson = o.boissonFormule;
+      if (o.sauces?.length) optClean.sauces = o.sauces;
+      if (o.supplements?.length) optClean.supplements = o.supplements.map(s => s.name);
+      if (o.supplementViande) optClean.supp_viande = o.supplementViande;
+      if (o.boissonsSupp?.length) optClean.boissons_supp = o.boissonsSupp.map(b => b.name);
+      return { produit: item.name, qte: qty, pu: unitPrice, total: unitPrice * qty, options: optClean };
+    })),
     source: "akm_resto_app",
   };
 }
 
-function redirectToTally(cart, total, creneauLabel) {
-  const payload = buildOrderPayload(cart, total, creneauLabel);
+// Limite de sécurité pour l'URL envoyée à Tally.
+// Au-delà, certains navigateurs refusent silencieusement la navigation.
+const URL_SAFE_LIMIT = 7000;
+
+function buildTallyUrl(payload) {
   const params = new URLSearchParams();
-  Object.entries(payload).forEach(([k, v]) => params.set(k, String(v)));
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) params.set(k, String(v));
+  });
   const sep = TALLY_FORM_URL.includes("?") ? "&" : "?";
-  window.location.href = `${TALLY_FORM_URL}${sep}${params.toString()}`;
+  return `${TALLY_FORM_URL}${sep}${params.toString()}`;
+}
+
+function redirectToTally(cart, total, creneauLabel) {
+  try {
+    let payload = buildOrderPayload(cart, total, creneauLabel);
+    let url = buildTallyUrl(payload);
+
+    // 1) Si l'URL est trop longue, on retire d'abord le JSON technique
+    //    (le récap lisible suffit au restaurant).
+    if (url.length > URL_SAFE_LIMIT && payload.commande_json) {
+      const { commande_json, ...rest } = payload;
+      payload = rest;
+      url = buildTallyUrl(payload);
+    }
+
+    // 2) Si c'est encore trop long, on tronque proprement le récap.
+    if (url.length > URL_SAFE_LIMIT && payload.commande_recap) {
+      const overflow = url.length - URL_SAFE_LIMIT;
+      // marge généreuse car l'encodage des accents gonfle la taille
+      const cut = Math.max(0, payload.commande_recap.length - overflow - 400);
+      payload.commande_recap =
+        payload.commande_recap.slice(0, cut) +
+        "\n\n⚠️ Récap tronqué — voir le détail dans commande_total / créneau.";
+      url = buildTallyUrl(payload);
+    }
+
+    window.location.assign(url);
+  } catch (err) {
+    // Dernier filet de sécurité : on redirige au minimum vers le formulaire
+    // avec les infos essentielles, pour que le bouton réponde TOUJOURS.
+    console.error("Erreur lors de la redirection Tally :", err);
+    const fallback = buildTallyUrl({
+      commande_total: fmt(total),
+      commande_total_num: total.toFixed(2),
+      heure_recuperation: creneauLabel,
+      source: "akm_resto_app",
+    });
+    window.location.assign(fallback);
+  }
 }
 
 // ─── UI : Chip / Section ─────────────────────────────────────
@@ -423,6 +482,7 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const [boissonFormule, setBoissonFormule] = useState(DEFAULT_BOISSON_FORMULE);
   const [boissonsSupp, setBoissonsSupp] = useState([]);
   const [enfantChoix, setEnfantChoix] = useState(null);
+  const [variantChoice, setVariantChoice] = useState(null);
 
   const showBoissonsSupp = CATEGORIES_AVEC_BOISSONS.includes(categoryKey);
   const showBoissonFormule = formule && item.menuPrice;
@@ -446,9 +506,10 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const totalP = unitP * quantity;
   const meatOK = !item.meatChoice || viandes.length === item.meatChoice;
 const enfantOK = !item.childBox || !!enfantChoix;
+const variantOK = !item.variants || !!variantChoice;
 const sideOK = !showSideChoice || !!side;
 const saucesValid = sauces.length === 0 || !sauces.includes("Sans sauce") || sauces.length === 1;
-const canAdd = meatOK && enfantOK && sideOK && saucesValid;
+const canAdd = meatOK && enfantOK && variantOK && sideOK && saucesValid;
 
   function toggleViande(v) {
     if (item.meatChoice === 1) { setViandes([v]); return; }
@@ -495,6 +556,7 @@ const canAdd = meatOK && enfantOK && sideOK && saucesValid;
   formule,
   viandes,
   enfantChoix,
+  variantChoice,
   sauces,
   supplements,
   supplementViande,
@@ -554,18 +616,48 @@ const canAdd = meatOK && enfantOK && sideOK && saucesValid;
           </div>
 
           {item.menuPrice && (
-            <div style={{ display: "flex", background: "rgba(255,255,255,0.18)", borderRadius: 12, padding: 4, marginTop: 14, gap: 4 }}>
-              {[
-                { label: `Seul · ${item.price.toFixed(2).replace(".",",")}€`, val: false },
-                { label: `Formule · ${item.menuPrice.toFixed(2).replace(".",",")}€`, val: true },
-              ].map(({ label, val }) => (
-                <button key={String(val)} onClick={() => setFormule(val)} style={{
-                  flex: 1, padding: "9px 6px", borderRadius: 10, border: "none",
-                  background: formule === val ? "#fff" : "transparent",
-                  color: formule === val ? COLORS.primary : "rgba(255,255,255,0.85)",
-                  fontWeight: 800, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
-                }}>{label}</button>
-              ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "stretch" }}>
+              {/* FORMULE — mise en avant */}
+              <button onClick={() => setFormule(true)} style={{
+                flex: 1.25, position: "relative", borderRadius: 14,
+                border: formule ? "none" : `2px solid ${COLORS.accent}`,
+                background: formule ? "#fff" : "rgba(0,199,129,0.20)",
+                color: formule ? COLORS.primary : "#fff",
+                padding: "13px 10px 10px", cursor: "pointer", textAlign: "left",
+                boxShadow: formule ? "0 5px 16px rgba(0,0,0,0.20)" : "0 0 0 1px rgba(255,255,255,0.15) inset",
+                transition: "all 0.2s",
+              }}>
+                <span style={{
+                  position: "absolute", top: -9, right: 8, background: COLORS.accent, color: "#fff",
+                  fontSize: 9, fontWeight: 900, padding: "2px 8px", borderRadius: 50, letterSpacing: 0.5,
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.25)", whiteSpace: "nowrap",
+                }}>★ LE + COMPLET</span>
+                <div style={{ fontWeight: 900, fontSize: 14, lineHeight: 1.1 }}>🍟 Formule</div>
+                <div style={{ fontSize: 10, marginTop: 2, opacity: formule ? 0.65 : 0.95, fontWeight: 600 }}>
+                  + frite ou salade + boisson
+                </div>
+                <div style={{ fontWeight: 900, fontSize: 16, marginTop: 4 }}>
+                  {item.menuPrice.toFixed(2).replace(".", ",")}€
+                </div>
+              </button>
+
+              {/* SEUL */}
+              <button onClick={() => setFormule(false)} style={{
+                flex: 1, borderRadius: 14, border: "none",
+                background: !formule ? "#fff" : "rgba(255,255,255,0.15)",
+                color: !formule ? COLORS.primary : "rgba(255,255,255,0.9)",
+                padding: "13px 10px 10px", cursor: "pointer", textAlign: "left",
+                boxShadow: !formule ? "0 5px 16px rgba(0,0,0,0.20)" : "none",
+                transition: "all 0.2s",
+              }}>
+                <div style={{ fontWeight: 900, fontSize: 14, lineHeight: 1.1 }}>L'article seul</div>
+                <div style={{ fontSize: 10, marginTop: 2, opacity: 0.65, fontWeight: 600 }}>
+                  sans accompagnement
+                </div>
+                <div style={{ fontWeight: 900, fontSize: 16, marginTop: 4 }}>
+                  {item.price.toFixed(2).replace(".", ",")}€
+                </div>
+              </button>
             </div>
           )}
         </div>
@@ -596,6 +688,25 @@ const canAdd = meatOK && enfantOK && sideOK && saucesValid;
     {!enfantChoix && (
       <div style={{ fontSize: 11, color: COLORS.primary, marginTop: 6 }}>
         ⚠ Veuillez choisir une option pour la box enfant
+      </div>
+    )}
+  </Section>
+)}
+          {item.variants && (
+  <Section title="🍴 Votre choix *">
+    <div style={{ display: "flex", flexWrap: "wrap" }}>
+      {item.variants.map(v => (
+        <Chip
+          key={v}
+          label={v}
+          selected={variantChoice === v}
+          onClick={() => setVariantChoice(v)}
+        />
+      ))}
+    </div>
+    {!variantChoice && (
+      <div style={{ fontSize: 11, color: COLORS.primary, marginTop: 6 }}>
+        ⚠ Sélectionnez une option
       </div>
     )}
   </Section>
@@ -783,7 +894,9 @@ const canAdd = meatOK && enfantOK && sideOK && saucesValid;
 }}>
   {canAdd
     ? `✓ Ajouter au panier · ${fmt(totalP)}`
-    : item.childBox && !enfantChoix
+    : item.variants && !variantChoice
+      ? "Sélectionnez votre choix"
+      : item.childBox && !enfantChoix
       ? "Choisissez une option pour la box enfant"
       : showSideChoice && !side
         ? "Choisissez un accompagnement"
@@ -908,12 +1021,13 @@ function TimeSlotsModal({ total, onClose, onConfirm }) {
 }
 
 // ─── CART PANEL ──────────────────────────────────────────────
-function CartPanel({ cart, onClose, onClear, onQtyChange, total, onSlotsOpen }) {
+function CartPanel({ cart, onClose, onClear, onQtyChange, onRemove, total, onSlotsOpen }) {
   const entries = Object.values(cart);
 
   function optSummary(options) {
     const parts = [];
     if (options.formule) parts.push("Formule menu");
+    if (options.variantChoice) parts.push("🍴 " + options.variantChoice);
     if (options.enfantChoix) parts.push("🧒 Box enfant : " + options.enfantChoix);
     if (options.viandes?.length) parts.push("🥩 " + options.viandes.join(", "));
     if (options.side) parts.push(options.side === "Frites" ? "🍟 Frites" : "🌾 Boulgour");
@@ -955,10 +1069,24 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, total, onSlotsOpen }) 
                     </div>
                     <div style={{ fontSize:13, color:COLORS.primary, fontWeight:700, marginTop:5 }}>{fmt(unitPrice)} × {qty}</div>
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                    <button onClick={() => onQtyChange(key, -1)} style={{ width:26, height:26, borderRadius:"50%", border:`1.5px solid ${COLORS.primary}`, background:"#fff", color:COLORS.primary, fontWeight:900, fontSize:16, cursor:"pointer" }}>−</button>
-                    <span style={{ fontWeight:800, minWidth:16, textAlign:"center" }}>{qty}</span>
-                    <button onClick={() => onQtyChange(key, +1)} style={{ width:26, height:26, borderRadius:"50%", border:"none", background:`linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`, color:"#fff", fontWeight:900, fontSize:16, cursor:"pointer" }}>+</button>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                    <button aria-label="Retirer l'article" onClick={() => onRemove(key)} style={{
+                      width:34, height:34, borderRadius:"50%", border:`1.5px solid ${COLORS.danger}`,
+                      background:"#fff", color:COLORS.danger, fontSize:15, cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center", padding:0, flexShrink:0,
+                    }}>🗑</button>
+                    <button aria-label="Diminuer la quantité" onClick={() => onQtyChange(key, -1)} style={{
+                      width:34, height:34, borderRadius:"50%", border:`2px solid ${COLORS.primary}`,
+                      background:"#fff", color:COLORS.primary, fontWeight:900, fontSize:22, lineHeight:1,
+                      cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, flexShrink:0,
+                    }}>−</button>
+                    <span style={{ fontWeight:800, minWidth:22, textAlign:"center", fontSize:16 }}>{qty}</span>
+                    <button aria-label="Augmenter la quantité" onClick={() => onQtyChange(key, +1)} style={{
+                      width:34, height:34, borderRadius:"50%", border:"none",
+                      background:`linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`,
+                      color:"#fff", fontWeight:900, fontSize:22, lineHeight:1, cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center", padding:0, flexShrink:0,
+                    }}>+</button>
                   </div>
                 </div>
                 <div style={{ textAlign:"right", fontWeight:800, fontSize:13, color:COLORS.ink, marginTop:4 }}>
@@ -1047,14 +1175,16 @@ function ItemCard({ item, totalQty, onOpen }) {
           {item.menuPrice && (
             <span style={{
               fontSize: 11,
-              background: "#FFF1EA",
-              color: COLORS.primaryDark,
-              border: "1px solid #FFD2C0",
+              background: COLORS.accent,
+              color: "#fff",
+              border: "none",
               borderRadius: 999,
-              padding: "3px 9px",
-              fontWeight: 700,
+              padding: "4px 10px",
+              fontWeight: 800,
+              boxShadow: "0 2px 6px rgba(0,199,129,0.35)",
+              whiteSpace: "nowrap",
             }}>
-              Formule {fmt(item.menuPrice)}
+              🍟 Formule {fmt(item.menuPrice)}
             </span>
           )}
         </div>
@@ -1114,13 +1244,14 @@ export default function AKMRestoApp() {
 
   const needsModal = (item, catKey) =>
   item.childBox ||
+  item.variants ||
   item.meatChoice ||
   item.sideChoice ||
   item.hasSauces ||
   item.hasSupplements ||
   item.menuPrice ||
   item.hasCrudites ||
-  CATEGORIE_AVEC_BOISSONS.includes(catKey);
+  CATEGORIES_AVEC_BOISSONS.includes(catKey);
   function handleOpen(item) {
     if (needsModal(item, activeCategory)) {
       setModalItem({ item, categoryKey: activeCategory });
@@ -1154,6 +1285,14 @@ export default function AKMRestoApp() {
     });
   }
 
+  function handleRemove(key) {
+    setCart(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
   function handleSlotConfirm(creneauLabel) {
     redirectToTally(cart, total, creneauLabel);
   }
@@ -1170,6 +1309,10 @@ export default function AKMRestoApp() {
     setActiveCategory(key);
     const el = navRef.current?.querySelector(`[data-key="${key}"]`);
     el?.scrollIntoView({ behavior:"smooth", inline:"center", block:"nearest" });
+  }
+
+  function scrollNav(dir) {
+    navRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
   }
 
   const currentItems = MENU[activeCategory] || [];
@@ -1206,26 +1349,58 @@ export default function AKMRestoApp() {
         </div>
       </div>
 
-      <div ref={navRef} style={{
-        display:"flex", gap:8, overflowX:"auto", padding:"12px 16px",
-        scrollbarWidth:"none", background:"#fff",
-        borderBottom:`1px solid ${COLORS.border}`,
+      <div style={{
+        background:"#fff", borderBottom:`1px solid ${COLORS.border}`,
         position:"sticky", top:88, zIndex:15,
-        boxShadow:"0 2px 8px rgba(0,0,0,0.04)",
+        boxShadow:"0 2px 8px rgba(0,0,0,0.04)", padding:"12px 0 14px",
       }}>
-        {CATEGORIES.map(cat => (
-          <button key={cat.key} data-key={cat.key} onClick={() => selectCat(cat.key)} style={{
-            flexShrink:0, padding:"7px 14px", borderRadius:50,
-            border: activeCategory === cat.key ? "none" : `1.5px solid ${COLORS.border}`,
-            background: activeCategory === cat.key ? `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})` : COLORS.bg,
-            color: activeCategory === cat.key ? "#fff" : COLORS.inkSoft,
-            fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap",
-            transition:"all 0.2s",
-            boxShadow: activeCategory === cat.key ? "0 3px 10px rgba(255,79,24,0.3)" : "none",
-          }}>
-            {cat.emoji} {cat.label}
-          </button>
-        ))}
+        {/* Titre du bloc */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px", marginBottom:10 }}>
+          <div>
+            <div style={{ fontWeight:900, fontSize:17, color:COLORS.ink, letterSpacing:"-0.3px", display:"flex", alignItems:"center", gap:7 }}>
+              🍽️ Notre Cuisine
+            </div>
+            <div style={{ fontSize:11, color:COLORS.muted, marginTop:1 }}>Choisissez une catégorie</div>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button aria-label="Précédent" onClick={() => scrollNav(-1)} style={{
+              width:32, height:32, borderRadius:"50%", border:`1.5px solid ${COLORS.border}`,
+              background:"#fff", color:COLORS.inkSoft, fontSize:16, fontWeight:900, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+            }}>‹</button>
+            <button aria-label="Suivant" onClick={() => scrollNav(1)} style={{
+              width:32, height:32, borderRadius:"50%", border:"none",
+              background:`linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})`,
+              color:"#fff", fontSize:16, fontWeight:900, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+              boxShadow:"0 3px 8px rgba(255,79,24,0.3)",
+            }}>›</button>
+          </div>
+        </div>
+
+        {/* Bandeau défilant */}
+        <div ref={navRef} style={{
+          display:"flex", gap:10, overflowX:"auto", padding:"2px 16px 4px",
+          scrollbarWidth:"none", scrollBehavior:"smooth",
+        }}>
+          {CATEGORIES.map(cat => {
+            const active = activeCategory === cat.key;
+            return (
+              <button key={cat.key} data-key={cat.key} onClick={() => selectCat(cat.key)} style={{
+                flexShrink:0, width:82, padding:"12px 6px 10px", borderRadius:16,
+                border: active ? "none" : `1.5px solid ${COLORS.border}`,
+                background: active ? `linear-gradient(135deg,${COLORS.primaryLight},${COLORS.primary})` : COLORS.bg,
+                color: active ? "#fff" : COLORS.inkSoft,
+                cursor:"pointer", transition:"all 0.2s",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:6,
+                boxShadow: active ? "0 4px 12px rgba(255,79,24,0.32)" : "none",
+              }}>
+                <span style={{ fontSize:26, lineHeight:1 }}>{cat.emoji}</span>
+                <span style={{ fontWeight:800, fontSize:11.5, textAlign:"center", lineHeight:1.15, whiteSpace:"nowrap" }}>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ padding:"16px 16px 120px" }}>
@@ -1275,7 +1450,7 @@ export default function AKMRestoApp() {
             animation:"slideUp 0.3s ease-out",
           }}>
             <CartPanel cart={cart} total={total} onClose={() => setCartOpen(false)}
-              onClear={() => setCart({})} onQtyChange={handleQtyChange}
+              onClear={() => setCart({})} onQtyChange={handleQtyChange} onRemove={handleRemove}
               onSlotsOpen={() => { setCartOpen(false); setSlotsOpen(true); }} />
           </div>
         </div>
