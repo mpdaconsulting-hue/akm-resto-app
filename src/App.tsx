@@ -50,6 +50,7 @@ const PRIX_SUPP_VIANDE = 3;
 
 // 🍟 SIDES
 const SIDES = ["Frites", "Boulgour"];
+const CUISSON = ["Bleu", "Saignant", "À point", "Bien cuit"];
 
 // 🧒 CHOIX BOX ENFANT
 const ENFANT_CHOIX = [
@@ -318,6 +319,7 @@ function buildOrderPayload(cart, total, creneauLabel) {
     const details = [];
     if (item.menuPrice) details.push(options?.formule ? "Formule menu" : "Article seul");
     if (options?.variantChoice) details.push(`Choix : ${options.variantChoice}`);
+    if (options?.cuisson) details.push(`Cuisson : ${options.cuisson}`);
     if (options?.viandes?.length) details.push(`Viande(s) : ${options.viandes.join(", ")}`);
     if (options?.enfantChoix) {
   details.push(`Choix box enfant : ${options.enfantChoix}`);
@@ -352,6 +354,7 @@ function buildOrderPayload(cart, total, creneauLabel) {
       if (o.formule) optClean.formule = true;
       if (o.enfantChoix) optClean.enfant = o.enfantChoix;
       if (o.variantChoice) optClean.choix = o.variantChoice;
+      if (o.cuisson) optClean.cuisson = o.cuisson;
       if (o.viandes?.length) optClean.viandes = o.viandes;
       if (o.side) optClean.accompagnement = o.side;
       if (o.crudites === "none") optClean.crudites = "aucune";
@@ -483,6 +486,7 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const [boissonsSupp, setBoissonsSupp] = useState([]);
   const [enfantChoix, setEnfantChoix] = useState(null);
   const [variantChoice, setVariantChoice] = useState(null);
+  const [cuisson, setCuisson] = useState(null);
 
   const showBoissonsSupp = CATEGORIES_AVEC_BOISSONS.includes(categoryKey);
   const showBoissonFormule = formule && item.menuPrice;
@@ -507,9 +511,10 @@ function CustomModal({ item, categoryKey, onClose, onConfirm }) {
   const meatOK = !item.meatChoice || viandes.length === item.meatChoice;
 const enfantOK = !item.childBox || !!enfantChoix;
 const variantOK = !item.variants || !!variantChoice;
+  const cuissonOK = !item.hasCuisson || !!cuisson;
 const sideOK = !showSideChoice || !!side;
 const saucesValid = sauces.length === 0 || !sauces.includes("Sans sauce") || sauces.length === 1;
-const canAdd = meatOK && enfantOK && variantOK && sideOK && saucesValid;
+const canAdd = meatOK && enfantOK && variantOK && cuissonOK && sideOK && saucesValid;
 
   function toggleViande(v) {
     if (item.meatChoice === 1) { setViandes([v]); return; }
@@ -556,6 +561,7 @@ const canAdd = meatOK && enfantOK && variantOK && sideOK && saucesValid;
   formule,
   viandes,
   enfantChoix,
+  cuisson,
   variantChoice,
   sauces,
   supplements,
@@ -707,6 +713,20 @@ const canAdd = meatOK && enfantOK && variantOK && sideOK && saucesValid;
     {!variantChoice && (
       <div style={{ fontSize: 11, color: COLORS.primary, marginTop: 6 }}>
         ⚠ Sélectionnez une option
+      </div>
+    )}
+  </Section>
+)}
+          {item.hasCuisson && (
+  <Section title="🔥 Cuisson *">
+    <div style={{ display: "flex", flexWrap: "wrap" }}>
+      {CUISSON.map(c => (
+        <Chip key={c} label={c} selected={cuisson === c} onClick={() => setCuisson(c)} />
+      ))}
+    </div>
+    {!cuisson && (
+      <div style={{ fontSize: 11, color: COLORS.primary, marginTop: 6 }}>
+        ⚠ Choisissez la cuisson
       </div>
     )}
   </Section>
@@ -1028,6 +1048,7 @@ function CartPanel({ cart, onClose, onClear, onQtyChange, onRemove, total, onSlo
     const parts = [];
     if (options.formule) parts.push("Formule menu");
     if (options.variantChoice) parts.push("🍴 " + options.variantChoice);
+    if (options.cuisson) parts.push("🔥 " + options.cuisson);
     if (options.enfantChoix) parts.push("🧒 Box enfant : " + options.enfantChoix);
     if (options.viandes?.length) parts.push("🥩 " + options.viandes.join(", "));
     if (options.side) parts.push(options.side === "Frites" ? "🍟 Frites" : "🌾 Boulgour");
