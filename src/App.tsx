@@ -1417,7 +1417,7 @@ export default function AKMRestoApp() {
                 boxShadow: active ? "0 4px 12px rgba(255,79,24,0.32)" : "none",
               }}>
                 <span style={{ position:"relative", display:"inline-block", fontSize:26, lineHeight:1 }}>{cat.emoji}{cat.key === "burgersSpeciaux" && (<span style={{ position:"absolute", bottom:-2, right:-7, fontSize:14 }}>⭐</span>)}</span>
-                <span style={{ fontWeight:800, fontSize:11.5, textAlign:"center", lineHeight:1.15, whiteSpace:"nowrap" }}>{cat.label}</span>
+                <span style={{ fontWeight:800, fontSize:11.5, textAlign:"center", lineHeight:1.2, whiteSpace:"normal", wordBreak:"break-word" }}>{cat.label}</span>
               </button>
             );
           })}
