@@ -123,7 +123,7 @@ const fmt = (n) => n.toFixed(2).replace(".", ",") + " €";
 // ─── CATEGORIES ──────────────────────────────────────────────
 const CATEGORIES = [
   { key: "burgers", label: "Burgers", emoji: "🍔" },
-  { key: "burgersSpeciaux", label: "Spéciaux", emoji: "⭐" },
+  { key: "burgersSpeciaux", label: "Burgers Spéciaux", emoji: "🍔" },
   { key: "wraps", label: "Wraps", emoji: "🌯" },
   { key: "gundi", label: "Gundi", emoji: "🫔" },
   { key: "sandwichs", label: "Sandwichs", emoji: "🥪" },
@@ -1416,7 +1416,7 @@ export default function AKMRestoApp() {
                 display:"flex", flexDirection:"column", alignItems:"center", gap:6,
                 boxShadow: active ? "0 4px 12px rgba(255,79,24,0.32)" : "none",
               }}>
-                <span style={{ fontSize:26, lineHeight:1 }}>{cat.emoji}</span>
+                <span style={{ position:"relative", display:"inline-block", fontSize:26, lineHeight:1 }}>{cat.emoji}{cat.key === "burgersSpeciaux" && (<span style={{ position:"absolute", bottom:-2, right:-7, fontSize:14 }}>⭐</span>)}</span>
                 <span style={{ fontWeight:800, fontSize:11.5, textAlign:"center", lineHeight:1.15, whiteSpace:"nowrap" }}>{cat.label}</span>
               </button>
             );
